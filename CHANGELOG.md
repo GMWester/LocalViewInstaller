@@ -2,6 +2,10 @@
 
 ## 1.2.1
 
+- **Android**: signed with the permanent release key, so later versions update over this one. Earlier Android builds used a temporary key: uninstall those once before installing this version.
+
+## 1.2.1
+
 - **Android**: the installer is now signed with the permanent release key, so later installer updates install over it. Earlier Android builds used a temporary key: uninstall those once before installing this version.
 
 ## 1.2.0
