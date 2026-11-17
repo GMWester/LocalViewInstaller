@@ -3,6 +3,8 @@ name: Build & release Localview Installer
 on:
   push:
     branches: [main]
+    # Docs/CI-only changes don't produce a release; every app change must bump `version:` in pubspec.yaml.
+    paths-ignore: ['**.md', '.github/**']
   workflow_dispatch:
 
 permissions:
@@ -115,14 +117,25 @@ jobs:
     needs: [windows, macos, linux, android, ios]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - name: Read version and refuse to modify an older release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' pubspec.yaml)
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release v$VERSION already exists. Raise 'version:' in pubspec.yaml so this update gets its own release."
+            exit 1
+          fi
       - uses: actions/download-artifact@v4
         with: { path: dist, merge-multiple: true }
       - run: ls -la dist
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
+          tag_name: v${{ env.VERSION }}
           target_commitish: ${{ github.sha }}
-          name: Localview Installer 1.0.0
+          name: Localview Installer ${{ env.VERSION }}
           make_latest: true
           overwrite_files: true
           files: dist/*
