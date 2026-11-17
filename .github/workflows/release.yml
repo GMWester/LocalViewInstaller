@@ -15,6 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Read version
+        shell: bash
+        run: |
+          echo "LI_VERSION=$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' pubspec.yaml)" >> "$GITHUB_ENV"
       - uses: subosito/flutter-action@v2
         with: { flutter-version: 3.50.0, channel: stable, cache: true }
       - run: flutter pub get
@@ -23,29 +27,40 @@ jobs:
 
   windows:
     needs: test
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+    runs-on: ${{ matrix.arch == 'arm64' && 'windows-11-arm' || 'windows-latest' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Read version
+        shell: bash
+        run: |
+          echo "LI_VERSION=$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' pubspec.yaml)" >> "$GITHUB_ENV"
       - uses: subosito/flutter-action@v2
-        with: { flutter-version: 3.50.0, channel: stable, cache: true }
-      - run: flutter build windows --release
+        with: { flutter-version: 3.50.0, channel: stable, architecture: "${{ matrix.arch }}", cache: true }
+      - run: flutter build windows --release --dart-define=LI_VERSION=${{ env.LI_VERSION }}
       - shell: pwsh
         run: |
-          $d = "LocalviewInstaller-windows-x64"
-          Copy-Item -Recurse build\windows\x64\runner\Release $d
+          $d = "LocalviewInstaller-windows-${{ matrix.arch }}"
+          Copy-Item -Recurse "build\windows\${{ matrix.arch }}\runner\Release" $d
           Rename-Item "$d\localview_installer.exe" "Localview Installer.exe"
           Compress-Archive -Path $d -DestinationPath "$d.zip"
       - uses: actions/upload-artifact@v4
-        with: { name: windows, path: LocalviewInstaller-windows-x64.zip }
+        with: { name: "windows-${{ matrix.arch }}", path: "LocalviewInstaller-windows-*.zip" }
 
   macos:
     needs: test
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Read version
+        shell: bash
+        run: |
+          echo "LI_VERSION=$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' pubspec.yaml)" >> "$GITHUB_ENV"
       - uses: subosito/flutter-action@v2
         with: { flutter-version: 3.50.0, channel: stable, cache: true }
-      - run: flutter build macos --release
+      - run: flutter build macos --release --dart-define=LI_VERSION=${{ env.LI_VERSION }}
       - run: |
           APP="build/macos/Build/Products/Release/Localview Installer.app"
           codesign --force --deep -s - "$APP"
@@ -62,12 +77,16 @@ jobs:
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-22.04-arm' || 'ubuntu-22.04' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Read version
+        shell: bash
+        run: |
+          echo "LI_VERSION=$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' pubspec.yaml)" >> "$GITHUB_ENV"
       - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev file
       - name: Install Flutter
         run: |
           git clone --depth 1 --branch 3.50.0 https://github.com/flutter/flutter.git "$HOME/flutter"
           echo "$HOME/flutter/bin" >> "$GITHUB_PATH"
-      - run: flutter config --no-analytics && flutter build linux --release
+      - run: flutter config --no-analytics && flutter build linux --release --dart-define=LI_VERSION=${{ env.LI_VERSION }}
       - name: Package (AppImage + tar.gz)
         run: |
           B=$(ls -d build/linux/*/release/bundle)
@@ -92,11 +111,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Read version
+        shell: bash
+        run: |
+          echo "LI_VERSION=$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' pubspec.yaml)" >> "$GITHUB_ENV"
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: "17" }
       - uses: subosito/flutter-action@v2
         with: { flutter-version: 3.50.0, channel: stable, cache: true }
-      - run: flutter build apk --release
+      - name: Signing key (keeps Android self-updates installable)
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "LV_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No ANDROID_KEYSTORE_B64 secret: the APK is signed with a temporary key."
+          fi
+      - run: flutter build apk --release --dart-define=LI_VERSION=${{ env.LI_VERSION }}
+        env:
+          LV_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       - run: cp build/app/outputs/flutter-apk/app-release.apk LocalviewInstaller-android.apk
       - uses: actions/upload-artifact@v4
         with: { name: android, path: LocalviewInstaller-android.apk }
@@ -106,9 +141,13 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Read version
+        shell: bash
+        run: |
+          echo "LI_VERSION=$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' pubspec.yaml)" >> "$GITHUB_ENV"
       - uses: subosito/flutter-action@v2
         with: { flutter-version: 3.50.0, channel: stable, cache: true }
-      - run: flutter build ios --release --no-codesign
+      - run: flutter build ios --release --no-codesign --dart-define=LI_VERSION=${{ env.LI_VERSION }}
       - run: mkdir Payload && cp -R build/ios/iphoneos/Runner.app Payload/ && zip -qr LocalviewInstaller-ios-unsigned.ipa Payload
       - uses: actions/upload-artifact@v4
         with: { name: ios, path: LocalviewInstaller-ios-unsigned.ipa }
@@ -118,11 +157,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Read version
+        shell: bash
+        run: |
+          echo "LI_VERSION=$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' pubspec.yaml)" >> "$GITHUB_ENV"
       - name: Read version and refuse to modify an older release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION=$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' pubspec.yaml)
+          VERSION=${{ env.LI_VERSION }}
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "::error::Release v$VERSION already exists. Raise 'version:' in pubspec.yaml so this update gets its own release."
@@ -144,7 +187,7 @@ jobs:
 
             | Run it on | File |
             |---|---|
-            | Windows | `LocalviewInstaller-windows-x64.zip` (unzip, run *Localview Installer.exe*) |
+            | Windows | `LocalviewInstaller-windows-x64.zip`, Windows on ARM: `LocalviewInstaller-windows-arm64.zip` (unzip, run *Localview Installer.exe*) |
             | macOS | `LocalviewInstaller-macos.dmg` |
             | Linux / SteamOS | `LocalviewInstaller-linux-<x64\|arm64>.AppImage` (or `.tar.gz`) |
             | Android, Android TV, Quest / Android XR | `LocalviewInstaller-android.apk` |

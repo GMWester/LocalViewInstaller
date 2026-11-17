@@ -29,6 +29,17 @@ class MainActivity : FlutterActivity() {
                     startActivity(intent)
                     result.success(true)
                 }
+                "isInstalled" -> {
+                    val pkg = call.argument<String>("package")!!
+                    result.success(packageManager.getLaunchIntentForPackage(pkg) != null ||
+                        packageManager.getLeanbackLaunchIntentForPackage(pkg) != null)
+                }
+                "launch" -> {
+                    val pkg = call.argument<String>("package")!!
+                    val i = packageManager.getLaunchIntentForPackage(pkg) ?: packageManager.getLeanbackLaunchIntentForPackage(pkg)
+                    if (i != null) startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    result.success(i != null)
+                }
                 else -> result.notImplemented()
             }
         }

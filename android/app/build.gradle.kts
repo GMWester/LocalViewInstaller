@@ -29,11 +29,22 @@ android {
         versionName = flutter.versionName
     }
 
+    // Permanent release key from CI secrets so Android accepts installer self-updates.
+    val releaseKeystore = System.getenv("LV_KEYSTORE")?.takeIf { it.isNotEmpty() && file(it).exists() }
+    signingConfigs {
+        create("release") {
+            if (releaseKeystore != null) {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("LV_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("LV_KEY_ALIAS") ?: "localview"
+                keyPassword = System.getenv("LV_KEY_PASSWORD") ?: System.getenv("LV_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (releaseKeystore != null) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }
 }

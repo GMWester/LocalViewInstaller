@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'catalog.dart';
+import 'system.dart';
 
 const String kRepo = 'GMWester/Localview';
 
@@ -57,9 +58,7 @@ Future<Release> fetchLatestRelease() async {
 const _android = MethodChannel('localview_installer/android');
 
 /// HTTP client that honours HTTP(S)_PROXY / NO_PROXY (corporate and school networks).
-HttpClient newClient() => HttpClient()
-  ..connectionTimeout = const Duration(seconds: 20)
-  ..findProxy = HttpClient.findProxyFromEnvironment;
+HttpClient newClient() => httpClient();
 
 class InstallerPage extends StatefulWidget {
   const InstallerPage({super.key});
@@ -82,11 +81,54 @@ class _InstallerPageState extends State<InstallerPage> {
   String? _status;
   File? _downloaded;
   HttpClient? _activeDownload;
+  String? _installedAt; // path/package of the installed Localview for the chosen version
+  InstallerUpdate? _selfUpdate;
+  double? _selfProgress;
+  String? _selfMessage;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _refreshInstalled();
+    checkInstallerUpdate().then((u) {
+      if (mounted && u != null) setState(() => _selfUpdate = u);
+    });
+  }
+
+  Future<void> _refreshInstalled() async {
+    final appImage = _downloaded?.path.endsWith('.AppImage') == true ? _downloaded!.path : null;
+    final at = _forThisDevice ? await findInstalled(_variant, appImage: appImage) : null;
+    if (mounted) setState(() => _installedAt = at);
+  }
+
+  Future<void> _launch() async {
+    final at = _installedAt;
+    if (at == null) return;
+    try {
+      await launchInstalled(at);
+    } catch (e) {
+      _snack('Could not start Localview: $e');
+    }
+  }
+
+  Future<void> _updateSelf() async {
+    final u = _selfUpdate;
+    if (u == null || u.assetUrl == null) return;
+    setState(() {
+      _selfProgress = 0;
+      _selfMessage = 'Downloading Localview Installer ${u.version}…';
+    });
+    try {
+      final msg = await applyInstallerUpdate(u, (p) {
+        if (mounted) setState(() => _selfProgress = p);
+      });
+      if (mounted) setState(() => _selfMessage = msg);
+    } catch (e) {
+      if (mounted) setState(() => _selfMessage = 'Update failed: $e');
+    } finally {
+      if (mounted) setState(() => _selfProgress = null);
+    }
   }
 
   Future<void> _load() async {
@@ -112,8 +154,13 @@ class _InstallerPageState extends State<InstallerPage> {
     return pickAsset(r.assets, _device, arch, _variant, pkg);
   }
 
-  bool get _forThisDevice =>
-      (_device.arches.length < 2 || _arch == detectArch()) && _forThisDeviceKind;
+  bool get _forThisDevice {
+    final here = detectArch();
+    final archOk = _device.arches.length < 2 ||
+        _arch == here ||
+        (_arch == Arch.armv7 && here == Arch.arm64 && Platform.isAndroid); // 64-bit phones run 32-bit apps
+    return archOk && _forThisDeviceKind;
+  }
 
   bool get _forThisDeviceKind =>
       _device == _thisDevice ||
@@ -212,6 +259,12 @@ class _InstallerPageState extends State<InstallerPage> {
     final f = _downloaded;
     if (f == null) return;
     final p = f.path;
+    // Watch for the installation to finish so the Launch button can appear.
+    for (var i = 1; i <= 90; i++) {
+      Future.delayed(Duration(seconds: i * 2), () {
+        if (mounted && _installedAt == null) _refreshInstalled();
+      });
+    }
     try {
       if (Platform.isAndroid && p.endsWith('.apk')) {
         final ok = await _android.invokeMethod<bool>('install', {'path': p}) ?? false;
@@ -339,6 +392,29 @@ class _InstallerPageState extends State<InstallerPage> {
             Text('Pick the device, its processor and the version. The latest release is downloaded straight from GitHub.',
                 style: t.bodyMedium),
             const SizedBox(height: 22),
+            if (_selfUpdate != null)
+              Card(
+                color: cs.tertiaryContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.system_update),
+                      title: Text('Localview Installer ${_selfUpdate!.version} is available'),
+                      subtitle: Text('You have $kInstallerVersion.'),
+                      trailing: _selfUpdate!.assetUrl == null
+                          ? null
+                          : FilledButton(
+                              onPressed: _selfProgress != null ? null : _updateSelf,
+                              child: const Text('Update'),
+                            ),
+                    ),
+                    if (_selfProgress != null) LinearProgressIndicator(value: _selfProgress),
+                    if (_selfMessage != null) Text(_selfMessage!, style: t.bodySmall),
+                  ]),
+                ),
+              ),
             if (_loading) const LinearProgressIndicator(),
             if (_loadError != null)
               Card(
@@ -356,12 +432,15 @@ class _InstallerPageState extends State<InstallerPage> {
                 for (final d in Device.values)
                   _choice(
                     selected: _device == d,
-                    onTap: () => setState(() {
-                      _device = d;
-                      _downloaded = null;
-                      _status = null;
-                      _progress = null;
-                    }),
+                    onTap: () {
+                      setState(() {
+                        _device = d;
+                        _downloaded = null;
+                        _status = null;
+                        _progress = null;
+                      });
+                      _refreshInstalled();
+                    },
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Row(children: [
                         Icon(_icon(d)),
@@ -380,18 +459,23 @@ class _InstallerPageState extends State<InstallerPage> {
               'Processor',
               _device.arches.length > 1
                   ? SegmentedButton<Arch>(
+                      showSelectedIcon: false,
                       segments: [for (final a in _device.arches) ButtonSegment(value: a, label: Text(a.label))],
                       selected: {_device.arches.contains(_arch) ? _arch : _device.arches.first},
-                      onSelectionChanged: busy ? null : (v) => setState(() => _arch = v.first),
+                      onSelectionChanged: busy
+                          ? null
+                          : (v) {
+                              setState(() => _arch = v.first);
+                              _refreshInstalled();
+                            },
                     )
                   : Text(
                       switch (_device) {
-                        Device.windows => 'x64 (Intel / AMD). Windows on ARM runs it through emulation.',
                         Device.macos => 'Universal: runs natively on Apple Silicon and Intel Macs.',
-                        _ => 'ARM64 (all supported devices).',
+                        _ => 'ARM64 (all supported iPhones and iPads).',
                       },
                       style: t.bodyMedium),
-              hint: _device == Device.steamos ? 'Steam Frame is ARM64, Steam Deck is x64.' : null,
+              hint: _device.archHint,
             ),
             _section(
               '3',
@@ -403,7 +487,10 @@ class _InstallerPageState extends State<InstallerPage> {
                     child: _choice(
                       width: double.infinity,
                       selected: _variant == v,
-                      onTap: () => setState(() => _variant = v),
+                      onTap: () {
+                        setState(() => _variant = v);
+                        _refreshInstalled();
+                      },
                       child: Row(children: [
                         Icon(_variant == v ? Icons.radio_button_checked : Icons.radio_button_off),
                         const SizedBox(width: 12),
@@ -433,6 +520,15 @@ class _InstallerPageState extends State<InstallerPage> {
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  if (_installedAt != null && _forThisDevice)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(children: [
+                        Icon(Icons.check_circle, color: Colors.green.shade600, size: 18),
+                        const SizedBox(width: 6),
+                        Text('Localview ${_variant.label} is installed on this device', style: t.bodySmall),
+                      ]),
+                    ),
                   if (asset != null) ...[
                     Text(asset.name, style: t.titleSmall),
                     Text('${_size(asset.size)} · ${_release?.name ?? ''}', style: t.bodySmall),
@@ -469,6 +565,12 @@ class _InstallerPageState extends State<InstallerPage> {
                         label: Text(_downloaded!.path.endsWith('.zip') || _downloaded!.path.endsWith('.tar.gz')
                             ? 'Open'
                             : 'Install'),
+                      ),
+                    if (_installedAt != null && _forThisDevice)
+                      FilledButton.icon(
+                        onPressed: _launch,
+                        icon: const Icon(Icons.play_arrow),
+                        label: Text('Launch Localview ${_variant.label}'),
                       ),
                     if (_downloaded != null)
                       TextButton.icon(onPressed: _reveal, icon: const Icon(Icons.folder_open), label: const Text('Show file')),
