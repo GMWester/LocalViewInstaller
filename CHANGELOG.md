@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1
+
+- **Android**: the installer is now signed with the permanent release key, so later installer updates install over it. Earlier Android builds used a temporary key: uninstall those once before installing this version.
+
 ## 1.2.0
 
 - **Version in every file name**: the installer's own downloads now end with their version (e.g. `LocalviewInstaller-windows-x64-1.2.0.zip`), like Localview's from 1.4.0 on.
