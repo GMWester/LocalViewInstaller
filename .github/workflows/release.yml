@@ -1,0 +1,138 @@
+name: Build & release Localview Installer
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { flutter-version: 3.50.0, channel: stable, cache: true }
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { flutter-version: 3.50.0, channel: stable, cache: true }
+      - run: flutter build windows --release
+      - shell: pwsh
+        run: |
+          $d = "LocalviewInstaller-windows-x64"
+          Copy-Item -Recurse build\windows\x64\runner\Release $d
+          Rename-Item "$d\localview_installer.exe" "Localview Installer.exe"
+          Compress-Archive -Path $d -DestinationPath "$d.zip"
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: LocalviewInstaller-windows-x64.zip }
+
+  macos:
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { flutter-version: 3.50.0, channel: stable, cache: true }
+      - run: flutter build macos --release
+      - run: |
+          APP="build/macos/Build/Products/Release/Localview Installer.app"
+          codesign --force --deep -s - "$APP"
+          mkdir dmg && cp -R "$APP" dmg/ && ln -s /Applications dmg/Applications
+          hdiutil create -volname "Localview Installer" -srcfolder dmg -ov -format UDZO LocalviewInstaller-macos.dmg
+      - uses: actions/upload-artifact@v4
+        with: { name: macos, path: LocalviewInstaller-macos.dmg }
+
+  linux:
+    needs: test
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-22.04-arm' || 'ubuntu-22.04' }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev file
+      - name: Install Flutter
+        run: |
+          git clone --depth 1 --branch 3.50.0 https://github.com/flutter/flutter.git "$HOME/flutter"
+          echo "$HOME/flutter/bin" >> "$GITHUB_PATH"
+      - run: flutter config --no-analytics && flutter build linux --release
+      - name: Package (AppImage + tar.gz)
+        run: |
+          B=$(ls -d build/linux/*/release/bundle)
+          D=LocalviewInstaller-linux-${{ matrix.arch }}
+          cp -r "$B" "$D" && tar czf "$D.tar.gz" "$D"
+          A=$(mktemp -d)/LocalviewInstaller.AppDir
+          mkdir -p "$A/usr/lib/app" && cp -r "$B"/. "$A/usr/lib/app/" && cp assets/icon.png "$A/localview-installer.png"
+          printf '#!/bin/sh\nHERE=$(dirname "$(readlink -f "$0")")\nexec "$HERE/usr/lib/app/localview_installer" "$@"\n' > "$A/AppRun" && chmod +x "$A/AppRun"
+          printf '[Desktop Entry]\nType=Application\nName=Localview Installer\nExec=localview-installer\nIcon=localview-installer\nCategories=Utility;\n' > "$A/localview-installer.desktop"
+          ARCH=$([ "${{ matrix.arch }}" = arm64 ] && echo aarch64 || echo x86_64)
+          curl -fsSL -o appimagetool "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$ARCH.AppImage" && chmod +x appimagetool
+          APPIMAGE_EXTRACT_AND_RUN=1 ARCH=$ARCH ./appimagetool --no-appstream "$A" "$D.AppImage"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: |
+            LocalviewInstaller-linux-*.tar.gz
+            LocalviewInstaller-linux-*.AppImage
+
+  android:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: subosito/flutter-action@v2
+        with: { flutter-version: 3.50.0, channel: stable, cache: true }
+      - run: flutter build apk --release
+      - run: cp build/app/outputs/flutter-apk/app-release.apk LocalviewInstaller-android.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: LocalviewInstaller-android.apk }
+
+  ios:
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { flutter-version: 3.50.0, channel: stable, cache: true }
+      - run: flutter build ios --release --no-codesign
+      - run: mkdir Payload && cp -R build/ios/iphoneos/Runner.app Payload/ && zip -qr LocalviewInstaller-ios-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with: { name: ios, path: LocalviewInstaller-ios-unsigned.ipa }
+
+  release:
+    needs: [windows, macos, linux, android, ios]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - run: ls -la dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          target_commitish: ${{ github.sha }}
+          name: Localview Installer 1.0.0
+          make_latest: true
+          overwrite_files: true
+          files: dist/*
+          body: |
+            Pick your device, processor and Localview version (LAN, WAN or Combined); the installer downloads the matching file from the latest [Localview release](https://github.com/GMWester/Localview/releases/latest) and opens/installs it.
+
+            | Run it on | File |
+            |---|---|
+            | Windows | `LocalviewInstaller-windows-x64.zip` (unzip, run *Localview Installer.exe*) |
+            | macOS | `LocalviewInstaller-macos.dmg` |
+            | Linux / SteamOS | `LocalviewInstaller-linux-<x64\|arm64>.AppImage` (or `.tar.gz`) |
+            | Android, Android TV, Quest / Android XR | `LocalviewInstaller-android.apk` |
+            | iPhone / iPad | `LocalviewInstaller-ios-unsigned.ipa` (sideload) |
