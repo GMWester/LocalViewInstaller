@@ -73,4 +73,18 @@ localview-combined-1.4.0-1.x86_64.rpm
     // Missing combination -> null (e.g. no LAN Linux arm64 deb in this list).
     expect(pick(Device.linux, Arch.arm64, Variant.lan, Package.installer), isNull);
   });
+
+  test('Android Pro files are picked for Android Pro only', () {
+    final names = 'Localview-Combined-android-1.9.0.apk Localview-Combined-android-arm64-1.9.0.apk '
+        'Localview-Combined-android-pro-1.9.0.apk Localview-Combined-android-pro-arm64-1.9.0.apk '
+        'Localview-WAN-android-pro-armv7-1.9.0.apk';
+    final assets = [for (final n in names.split(' ')) ReleaseAsset(n, 'https://x/$n', 1)];
+    String? p(Device d, Arch a, Variant v) => pickAsset(assets, d, a, v, Package.installer)?.name;
+    expect(p(Device.androidPro, Arch.arm64, Variant.combined), 'Localview-Combined-android-pro-arm64-1.9.0.apk');
+    expect(p(Device.androidPro, Arch.armv7, Variant.combined), 'Localview-Combined-android-pro-1.9.0.apk');
+    expect(p(Device.androidPro, Arch.armv7, Variant.wan), 'Localview-WAN-android-pro-armv7-1.9.0.apk');
+    expect(p(Device.android, Arch.arm64, Variant.combined), 'Localview-Combined-android-arm64-1.9.0.apk');
+    expect(p(Device.android, Arch.armv7, Variant.combined), 'Localview-Combined-android-1.9.0.apk');
+    expect(p(Device.androidPro, Arch.arm64, Variant.lan), isNull);
+  });
 }

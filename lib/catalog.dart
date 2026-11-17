@@ -3,7 +3,7 @@
 import 'dart:io';
 import 'dart:ffi' show Abi;
 
-enum Device { windows, macos, linux, steamos, android, androidTv, vr, ios }
+enum Device { windows, macos, linux, steamos, android, androidPro, androidTv, vr, ios }
 
 enum Arch { x64, arm64, armv7 }
 
@@ -18,6 +18,7 @@ extension DeviceInfo on Device {
         Device.linux => 'Linux',
         Device.steamos => 'SteamOS',
         Device.android => 'Android',
+        Device.androidPro => 'Android Pro',
         Device.androidTv => 'Android TV',
         Device.vr => 'VR headset',
         Device.ios => 'iPhone / iPad',
@@ -29,6 +30,7 @@ extension DeviceInfo on Device {
         Device.linux => 'Ubuntu, Fedora, Debian…',
         Device.steamos => 'Steam Frame, Steam Deck',
         Device.android => 'Phones & tablets, Android 7+',
+        Device.androidPro => 'Real mouse & keyboard when controlled',
         Device.androidTv => 'Google TV, Shield…',
         Device.vr => 'Meta Quest, Android XR',
         Device.ios => 'Sideload (AltStore…)',
@@ -37,7 +39,7 @@ extension DeviceInfo on Device {
   /// Processor choices that exist for this device.
   List<Arch> get arches => switch (this) {
         Device.linux || Device.steamos => const [Arch.x64, Arch.arm64],
-        Device.android || Device.androidTv => const [Arch.arm64, Arch.armv7, Arch.x64],
+        Device.android || Device.androidPro || Device.androidTv => const [Arch.arm64, Arch.armv7, Arch.x64],
         Device.vr => const [Arch.arm64, Arch.armv7, Arch.x64],
         Device.windows => const [Arch.x64, Arch.arm64],
         _ => const [],
@@ -48,6 +50,8 @@ extension DeviceInfo on Device {
         Device.steamos => 'Steam Frame is ARM64, Steam Deck is x64.',
         Device.windows => 'ARM64 for Windows on ARM laptops (Snapdragon / Copilot+ PCs, Surface Pro X); x64 for everything else.',
         Device.android => 'ARM64 for phones from about 2017 on; ARMv7 for older or low-cost 32-bit phones; x86-64 for Chromebooks and emulators. Not sure? ARMv7 runs on almost every phone.',
+        Device.androidPro =>
+          'Same processors as Android: ARM64 for phones from about 2017 on, ARMv7 for older 32-bit phones, x86-64 for Chromebooks and emulators. Pro replaces the regular Android app (same app, settings kept). A computer starts its real mouse & keyboard helper over ADB (Localview 1.9.0 or later).',
         Device.androidTv => 'Most TVs and streaming sticks run 32-bit Android even with a 64-bit chip: pick ARMv7 if unsure. ARM64 for e.g. Shield TV and Google TV Streamer.',
         Device.vr => 'Quest 2/3/3S/Pro and Android XR headsets are ARM64. ARMv7 is for older 32-bit headsets on Android 10+; x86-64 for the Android XR emulator.',
         Device.ios => 'iPhones and iPads run on Apple silicon (A-series or M-series chips), which is ARM64, so there is one version for all of them. Needs iOS 15 or later: iPhone 6s / SE (1st gen) and newer, iPad Air 2, iPad mini 4, iPad (5th gen) and newer, every iPad Pro.',
@@ -97,7 +101,7 @@ String _named(String stem, String ext) => '^${RegExp.escape(stem)}(-[0-9]+(\\.[0
 
 /// Patterns a release asset may match, best first (per-processor APK before the all-in-one APK).
 List<RegExp> assetPatterns(Device d, Arch a, Variant v, Package p) {
-  final apk = switch (d) { Device.android => 'android', Device.androidTv => 'android-tv', Device.vr => 'android-xr', _ => null };
+  final apk = switch (d) { Device.android => 'android', Device.androidPro => 'android-pro', Device.androidTv => 'android-tv', Device.vr => 'android-xr', _ => null };
   if (apk != null) {
     return [
       RegExp(_named('Localview-${v.label}-$apk-${a.apkSuffix}', '.apk')),
@@ -130,6 +134,7 @@ RegExp assetPattern(Device d, Arch a, Variant v, Package p) {
     (Device.steamos, Package.installer) => _named('Localview-$label-steamos-$arch', '.AppImage'),
     (Device.steamos, Package.portable) => _named('Localview-$label-steamos-$arch', '.tar.gz'),
     (Device.android, _) => _named('Localview-$label-android', '.apk'),
+    (Device.androidPro, _) => _named('Localview-$label-android-pro', '.apk'),
     (Device.androidTv, _) => _named('Localview-$label-android-tv', '.apk'),
     (Device.vr, _) => _named('Localview-$label-android-xr', '.apk'),
     (Device.ios, _) => _named('Localview-$label-ios-unsigned', '.ipa'),

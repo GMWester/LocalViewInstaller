@@ -164,7 +164,7 @@ class _InstallerPageState extends State<InstallerPage> {
 
   bool get _forThisDeviceKind =>
       _device == _thisDevice ||
-      (_thisDevice == Device.android && (_device == Device.androidTv || _device == Device.vr)) ||
+      (_thisDevice == Device.android && (_device == Device.androidPro || _device == Device.androidTv || _device == Device.vr)) ||
       (_thisDevice == Device.linux && _device == Device.steamos) ||
       (_thisDevice == Device.steamos && _device == Device.linux);
 
@@ -320,6 +320,7 @@ class _InstallerPageState extends State<InstallerPage> {
         Device.linux => Icons.terminal,
         Device.steamos => Icons.sports_esports,
         Device.android => Icons.phone_android,
+        Device.androidPro => Icons.mouse,
         Device.androidTv => Icons.tv,
         Device.vr => Icons.view_in_ar,
         Device.ios => Icons.phone_iphone,

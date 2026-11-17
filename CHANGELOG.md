@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.0
+
+- **Android Pro**: new device choice for Localview Pro (Localview 1.9.0 and later), the Android app with a helper for real mouse and keyboard input when a computer controls the phone or tablet. Same processor choices as Android (per-processor APK, or the all-in-one APK as a fallback). It installs over the regular Android app and keeps its settings.
+
 ## 1.2.1
 
 - **Android**: signed with the permanent release key, so later versions update over this one. Earlier Android builds used a temporary key: uninstall those once before installing this version.
