@@ -92,14 +92,16 @@ extension ArchInfo on Arch {
   String get apkSuffix => switch (this) { Arch.x64 => 'x86_64', Arch.arm64 => 'arm64', Arch.armv7 => 'armv7' };
 }
 
+/// `<stem>-<version><ext>` (Localview 1.4.0 and later) or `<stem><ext>` (older releases).
+String _named(String stem, String ext) => '^${RegExp.escape(stem)}(-[0-9]+(\\.[0-9]+)*)?${RegExp.escape(ext)}\$';
+
 /// Patterns a release asset may match, best first (per-processor APK before the all-in-one APK).
 List<RegExp> assetPatterns(Device d, Arch a, Variant v, Package p) {
   final apk = switch (d) { Device.android => 'android', Device.androidTv => 'android-tv', Device.vr => 'android-xr', _ => null };
   if (apk != null) {
-    final e = RegExp.escape;
     return [
-      RegExp('^${e('Localview-${v.label}-$apk-${a.apkSuffix}.apk')}\$'),
-      RegExp('^${e('Localview-${v.label}-$apk.apk')}\$'),
+      RegExp(_named('Localview-${v.label}-$apk-${a.apkSuffix}', '.apk')),
+      RegExp(_named('Localview-${v.label}-$apk', '.apk')),
     ];
   }
   return [
@@ -117,20 +119,20 @@ RegExp assetPattern(Device d, Arch a, Variant v, Package p) {
   final debArch = a == Arch.arm64 ? 'arm64' : 'amd64';
   String e(String s) => RegExp.escape(s);
   final pattern = switch ((d, p)) {
-    (Device.windows, Package.installer) => '^${e('Localview-$label-windows-$arch-setup.exe')}\$',
-    (Device.windows, Package.portable) => '^${e('Localview-$label-windows-$arch.zip')}\$',
-    (Device.macos, Package.installer) => '^${e('Localview-$label-macos.dmg')}\$',
-    (Device.macos, Package.portable) => '^${e('Localview-$label-macos-universal.zip')}\$',
+    (Device.windows, Package.installer) => _named('Localview-$label-windows-$arch-setup', '.exe'),
+    (Device.windows, Package.portable) => _named('Localview-$label-windows-$arch', '.zip'),
+    (Device.macos, Package.installer) => _named('Localview-$label-macos', '.dmg'),
+    (Device.macos, Package.portable) => _named('Localview-$label-macos-universal', '.zip'),
     (Device.linux, Package.installer) => '^${e('localview-${mode}_')}.+_${e('$debArch.deb')}\$',
     (Device.linux, Package.rpm) => '^${e('localview-$mode-')}.+\\.${a == Arch.arm64 ? 'aarch64' : 'x86_64'}\\.rpm\$',
     (_, Package.rpm) => r'^$ no rpm for this device',
-    (Device.linux, Package.portable) => '^${e('Localview-$label-linux-$arch.AppImage')}\$',
-    (Device.steamos, Package.installer) => '^${e('Localview-$label-steamos-$arch.AppImage')}\$',
-    (Device.steamos, Package.portable) => '^${e('Localview-$label-steamos-$arch.tar.gz')}\$',
-    (Device.android, _) => '^${e('Localview-$label-android.apk')}\$',
-    (Device.androidTv, _) => '^${e('Localview-$label-android-tv.apk')}\$',
-    (Device.vr, _) => '^${e('Localview-$label-android-xr.apk')}\$',
-    (Device.ios, _) => '^${e('Localview-$label-ios-unsigned.ipa')}\$',
+    (Device.linux, Package.portable) => _named('Localview-$label-linux-$arch', '.AppImage'),
+    (Device.steamos, Package.installer) => _named('Localview-$label-steamos-$arch', '.AppImage'),
+    (Device.steamos, Package.portable) => _named('Localview-$label-steamos-$arch', '.tar.gz'),
+    (Device.android, _) => _named('Localview-$label-android', '.apk'),
+    (Device.androidTv, _) => _named('Localview-$label-android-tv', '.apk'),
+    (Device.vr, _) => _named('Localview-$label-android-xr', '.apk'),
+    (Device.ios, _) => _named('Localview-$label-ios-unsigned', '.ipa'),
   };
   return RegExp(pattern);
 }

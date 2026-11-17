@@ -7,7 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'catalog.dart';
 
-const String kInstallerVersion = String.fromEnvironment('LI_VERSION', defaultValue: '1.1.1');
+const String kInstallerVersion = String.fromEnvironment('LI_VERSION', defaultValue: '1.2.0');
 const String kInstallerRepo = 'GMWester/LocalViewInstaller';
 
 const _android = MethodChannel('localview_installer/android');
@@ -77,15 +77,19 @@ int compareVersions(String a, String b) {
   return 0;
 }
 
-String? _selfAssetName() {
+/// This installer's release file: `LocalviewInstaller-<platform>-<version><ext>` from 1.2.0 on,
+/// without the version before that.
+RegExp? selfAssetPattern() {
   final arch = detectArch() == Arch.arm64 ? 'arm64' : 'x64';
-  if (Platform.isWindows) return 'LocalviewInstaller-windows-$arch.zip';
-  if (Platform.isMacOS) return 'LocalviewInstaller-macos.dmg';
-  if (Platform.isAndroid) return 'LocalviewInstaller-android.apk';
+  RegExp named(String stem, String ext) =>
+      RegExp('^${RegExp.escape(stem)}(-[0-9]+(\\.[0-9]+)*)?${RegExp.escape(ext)}\$');
+  if (Platform.isWindows) return named('LocalviewInstaller-windows-$arch', '.zip');
+  if (Platform.isMacOS) return named('LocalviewInstaller-macos', '.dmg');
+  if (Platform.isAndroid) return named('LocalviewInstaller-android', '.apk');
   if (Platform.isLinux) {
     return (Platform.environment['APPIMAGE'] ?? '').isNotEmpty
-        ? 'LocalviewInstaller-linux-$arch.AppImage'
-        : 'LocalviewInstaller-linux-$arch.tar.gz';
+        ? named('LocalviewInstaller-linux-$arch', '.AppImage')
+        : named('LocalviewInstaller-linux-$arch', '.tar.gz');
   }
   return null;
 }
@@ -103,9 +107,10 @@ Future<InstallerUpdate?> checkInstallerUpdate() async {
     final j = jsonDecode(body) as Map<String, dynamic>;
     final version = (j['tag_name'] as String? ?? '').replaceFirst(RegExp(r'^v'), '');
     if (compareVersions(version, kInstallerVersion) <= 0) return null;
-    final want = _selfAssetName();
+    final want = selfAssetPattern();
     for (final a in (j['assets'] as List).cast<Map<String, dynamic>>()) {
-      if (a['name'] == want) return InstallerUpdate(version, want, a['browser_download_url'] as String);
+      final name = a['name'] as String;
+      if (want != null && want.hasMatch(name)) return InstallerUpdate(version, name, a['browser_download_url'] as String);
     }
     return InstallerUpdate(version, null, null);
   } catch (_) {

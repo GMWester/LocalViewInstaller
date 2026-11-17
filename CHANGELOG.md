@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0
+
+- **Version in every file name**: the installer's own downloads now end with their version (e.g. `LocalviewInstaller-windows-x64-1.2.0.zip`), like Localview's from 1.4.0 on.
+- Finds Localview downloads under both the new versioned names and the older names, and recognises its own updates either way. Installer 1.1.1 and older only know the old names, so download this version once by hand.
+
 ## 1.1.1
 
 - **iPhone / iPad**: the processor section now says *Apple silicon (ARM64)* and lists which iPhones and iPads are supported (iOS 15 or later).

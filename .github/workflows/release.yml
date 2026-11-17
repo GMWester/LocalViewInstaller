@@ -54,7 +54,7 @@ jobs:
           $d = "LocalviewInstaller-windows-${{ matrix.arch }}"
           Copy-Item -Recurse "build\windows\${{ matrix.arch }}\runner\Release" $d
           Rename-Item "$d\localview_installer.exe" "Localview Installer.exe"
-          Compress-Archive -Path $d -DestinationPath "$d.zip"
+          Compress-Archive -Path $d -DestinationPath "$d-$env:LI_VERSION.zip"
       - uses: actions/upload-artifact@v4
         with: { name: "windows-${{ matrix.arch }}", path: "LocalviewInstaller-windows-*.zip" }
 
@@ -74,9 +74,9 @@ jobs:
           APP="build/macos/Build/Products/Release/Localview Installer.app"
           codesign --force --deep -s - "$APP"
           mkdir dmg && cp -R "$APP" dmg/ && ln -s /Applications dmg/Applications
-          hdiutil create -volname "Localview Installer" -srcfolder dmg -ov -format UDZO LocalviewInstaller-macos.dmg
+          hdiutil create -volname "Localview Installer" -srcfolder dmg -ov -format UDZO "LocalviewInstaller-macos-$LI_VERSION.dmg"
       - uses: actions/upload-artifact@v4
-        with: { name: macos, path: LocalviewInstaller-macos.dmg }
+        with: { name: macos, path: LocalviewInstaller-macos-*.dmg }
 
   linux:
     needs: test
@@ -100,14 +100,14 @@ jobs:
         run: |
           B=$(ls -d build/linux/*/release/bundle)
           D=LocalviewInstaller-linux-${{ matrix.arch }}
-          cp -r "$B" "$D" && tar czf "$D.tar.gz" "$D"
+          cp -r "$B" "$D" && tar czf "$D-$LI_VERSION.tar.gz" "$D"
           A=$(mktemp -d)/LocalviewInstaller.AppDir
           mkdir -p "$A/usr/lib/app" && cp -r "$B"/. "$A/usr/lib/app/" && cp assets/icon.png "$A/localview-installer.png"
           printf '#!/bin/sh\nHERE=$(dirname "$(readlink -f "$0")")\nexec "$HERE/usr/lib/app/localview_installer" "$@"\n' > "$A/AppRun" && chmod +x "$A/AppRun"
           printf '[Desktop Entry]\nType=Application\nName=Localview Installer\nExec=localview-installer\nIcon=localview-installer\nCategories=Utility;\n' > "$A/localview-installer.desktop"
           ARCH=$([ "${{ matrix.arch }}" = arm64 ] && echo aarch64 || echo x86_64)
           curl -fsSL -o appimagetool "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$ARCH.AppImage" && chmod +x appimagetool
-          APPIMAGE_EXTRACT_AND_RUN=1 ARCH=$ARCH ./appimagetool --no-appstream "$A" "$D.AppImage"
+          APPIMAGE_EXTRACT_AND_RUN=1 ARCH=$ARCH ./appimagetool --no-appstream "$A" "$D-$LI_VERSION.AppImage"
       - uses: actions/upload-artifact@v4
         with:
           name: linux-${{ matrix.arch }}
@@ -141,9 +141,9 @@ jobs:
       - run: flutter build apk --release --dart-define=LI_VERSION=${{ env.LI_VERSION }}
         env:
           LV_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      - run: cp build/app/outputs/flutter-apk/app-release.apk LocalviewInstaller-android.apk
+      - run: cp build/app/outputs/flutter-apk/app-release.apk "LocalviewInstaller-android-$LI_VERSION.apk"
       - uses: actions/upload-artifact@v4
-        with: { name: android, path: LocalviewInstaller-android.apk }
+        with: { name: android, path: LocalviewInstaller-android-*.apk }
 
   ios:
     needs: test
@@ -157,9 +157,9 @@ jobs:
       - uses: subosito/flutter-action@v2
         with: { flutter-version: 3.50.0, channel: stable, cache: true }
       - run: flutter build ios --release --no-codesign --dart-define=LI_VERSION=${{ env.LI_VERSION }}
-      - run: mkdir Payload && cp -R build/ios/iphoneos/Runner.app Payload/ && zip -qr LocalviewInstaller-ios-unsigned.ipa Payload
+      - run: mkdir Payload && cp -R build/ios/iphoneos/Runner.app Payload/ && zip -qr "LocalviewInstaller-ios-unsigned-$LI_VERSION.ipa" Payload
       - uses: actions/upload-artifact@v4
-        with: { name: ios, path: LocalviewInstaller-ios-unsigned.ipa }
+        with: { name: ios, path: LocalviewInstaller-ios-unsigned-*.ipa }
 
   release:
     needs: [windows, macos, linux, android, ios]
@@ -196,8 +196,8 @@ jobs:
 
             | Run it on | File |
             |---|---|
-            | Windows | `LocalviewInstaller-windows-x64.zip`, Windows on ARM: `LocalviewInstaller-windows-arm64.zip` (unzip, run *Localview Installer.exe*) |
-            | macOS | `LocalviewInstaller-macos.dmg` |
-            | Linux / SteamOS | `LocalviewInstaller-linux-<x64\|arm64>.AppImage` (or `.tar.gz`) |
-            | Android, Android TV, Quest / Android XR | `LocalviewInstaller-android.apk` |
-            | iPhone / iPad | `LocalviewInstaller-ios-unsigned.ipa` (sideload) |
+            | Windows | `LocalviewInstaller-windows-x64-<version>.zip`, Windows on ARM: `LocalviewInstaller-windows-arm64-<version>.zip` (unzip, run *Localview Installer.exe*) |
+            | macOS | `LocalviewInstaller-macos-<version>.dmg` |
+            | Linux / SteamOS | `LocalviewInstaller-linux-<x64\|arm64>-<version>.AppImage` (or `.tar.gz`) |
+            | Android, Android TV, Quest / Android XR | `LocalviewInstaller-android-<version>.apk` |
+            | iPhone / iPad | `LocalviewInstaller-ios-unsigned-<version>.ipa` (sideload) |
