@@ -472,7 +472,7 @@ class _InstallerPageState extends State<InstallerPage> {
                   : Text(
                       switch (_device) {
                         Device.macos => 'Universal: runs natively on Apple Silicon and Intel Macs.',
-                        _ => 'ARM64 (all supported iPhones and iPads).',
+                        _ => 'Apple silicon (ARM64): every iPhone and iPad uses it.',
                       },
                       style: t.bodyMedium),
               hint: _device.archHint,

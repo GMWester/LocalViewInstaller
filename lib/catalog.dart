@@ -50,6 +50,7 @@ extension DeviceInfo on Device {
         Device.android => 'ARM64 for phones from about 2017 on; ARMv7 for older or low-cost 32-bit phones; x86-64 for Chromebooks and emulators. Not sure? ARMv7 runs on almost every phone.',
         Device.androidTv => 'Most TVs and streaming sticks run 32-bit Android even with a 64-bit chip: pick ARMv7 if unsure. ARM64 for e.g. Shield TV and Google TV Streamer.',
         Device.vr => 'Quest 2/3/3S/Pro and Android XR headsets are ARM64. ARMv7 is for older 32-bit headsets on Android 10+; x86-64 for the Android XR emulator.',
+        Device.ios => 'iPhones and iPads run on Apple silicon (A-series or M-series chips), which is ARM64, so there is one version for all of them. Needs iOS 15 or later: iPhone 6s / SE (1st gen) and newer, iPad Air 2, iPad mini 4, iPad (5th gen) and newer, every iPad Pro.',
         _ => null,
       };
 

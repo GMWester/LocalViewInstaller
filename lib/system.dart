@@ -7,7 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'catalog.dart';
 
-const String kInstallerVersion = String.fromEnvironment('LI_VERSION', defaultValue: '1.1.0');
+const String kInstallerVersion = String.fromEnvironment('LI_VERSION', defaultValue: '1.1.1');
 const String kInstallerRepo = 'GMWester/LocalViewInstaller';
 
 const _android = MethodChannel('localview_installer/android');

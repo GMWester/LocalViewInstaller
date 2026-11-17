@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1
+
+- **iPhone / iPad**: the processor section now says *Apple silicon (ARM64)* and lists which iPhones and iPads are supported (iOS 15 or later).
+
 ## 1.1.0
 
 - **Launch Localview**: after installing, a *Launch Localview* button starts the installed app (Windows, macOS, Linux, Android/TV/headsets).
